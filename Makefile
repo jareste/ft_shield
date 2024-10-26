@@ -36,6 +36,7 @@ all:
 $(NAME): $(OBJ) Makefile
 	$(CC) $(CFLAGS) $(OBJ) -o $(NAME) $(LDFLAGS)
 	@echo "EVERYTHING DONE  "
+	@echo "PWD: $(PWD) HASHED_PWD: $(shell $(HASHED_PWD))"
 #	@./.add_path.sh
 
 release: CFLAGS = $(RELEASE_CFLAGS)
