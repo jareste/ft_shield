@@ -6,14 +6,17 @@ CC = cc
 CFLAGS = -Werror -Wextra -Wall
 LDFLAGS = -lm
 RELEASE_CFLAGS = $(CFLAGS) -DNDEBUG
+PWD = 1234
+HASHED_PWD = echo -n $(PWD) | md5sum | head -c 32
+
 #########
 
 #########
-FILES = main 
+FILES = main md5 ft_malloc
 
 SRC = $(addsuffix .c, $(FILES))
 
-vpath %.c srcs inc srcs/parse_arg srcs/nmap 
+vpath %.c srcs inc
 #########
 
 #########
@@ -25,7 +28,7 @@ DEP = $(addsuffix .d, $(basename $(OBJ)))
 #########
 $(OBJ_DIR)/%.o: %.c
 	@mkdir -p $(@D)
-	${CC} -MMD $(CFLAGS) -c -Iinc  $< -o $@
+	${CC} -MMD $(CFLAGS)  -DPWD=\"$(shell $(HASHED_PWD))\" -c -Iinc  $< -o $@
 
 all: 
 	$(MAKE) $(NAME)

