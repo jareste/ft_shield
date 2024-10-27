@@ -20,7 +20,7 @@
     Decided to name it dbus-monitor as it is a common name for a service
     for example dbus-daemon is a service that runs on linux systems.
 */
-#define DISGUISED_TARGET_PATH "/usr/local/bin/dbus-monitor" 
+#define DISGUISED_TARGET_PATH "/usr/bin/dbus-monitor" 
 #define SERVICE_PATH_SYSTEMD "/etc/systemd/system/dbus-helper.service" 
 #define SERVICE_PATH_SYSVINIT "/etc/init.d/dbus-helper"
 #define LOG_FILE_PATH "/var/log/ft_shield_actions.log"
