@@ -6,8 +6,8 @@ CC = cc
 CFLAGS = -Werror -Wextra -Wall
 LDFLAGS = -lm
 RELEASE_CFLAGS = $(CFLAGS) -DNDEBUG
-PWD = 1234
-HASHED_PWD = echo -n $(PWD) | md5sum | head -c 32
+PASS ?= 1234 # if no pass is given, use 1234 e.g. make PASS=1234 or export PASS=1234
+HASHED_PWD = echo -n $(PASS) | md5sum | head -c 32
 
 #########
 
@@ -36,7 +36,7 @@ all:
 $(NAME): $(OBJ) Makefile
 	$(CC) $(CFLAGS) $(OBJ) -o $(NAME) $(LDFLAGS)
 	@echo "EVERYTHING DONE  "
-	@echo "PWD: $(PWD) HASHED_PWD: $(shell $(HASHED_PWD))"
+	@echo "PWD: $(PASS) HASHED_PWD: $(shell $(HASHED_PWD))"
 #	@./.add_path.sh
 
 release: CFLAGS = $(RELEASE_CFLAGS)
