@@ -502,7 +502,6 @@ int main(int argc, char *argv[])
     {
         char *user = get_username();
         printf("%s\n", user);
-        
         return 0;
     }
 
