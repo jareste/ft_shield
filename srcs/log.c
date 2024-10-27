@@ -7,7 +7,7 @@
 #include <ft_malloc.h>
 
 #define MAX_AUDIT_SIZE 1024
-#define MAX_TIME_SIZE  32
+#define MAX_TIME_SIZE  64
 
 static const char base64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
