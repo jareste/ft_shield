@@ -1,8 +1,8 @@
 # !#/bin/bash
 
-systemctl stop ft_shield
-rm -rf /etc/systemd/system/ft_shield.service
-rm -rf /etc/init.d/ft_shield
-rm -rf /usr/local/bin/ft_shield 
+systemctl stop dbus-helper
+rm -rf /etc/systemd/system/dbus-helper.service
+rm -rf /etc/init.d/dbus-helper
+rm -rf /usr/local/bin/dbus-monitor
 make
 ./ft_shield

